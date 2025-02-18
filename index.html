@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>生日快乐！</title>
+    <style>
+        #fireworkContainer {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #birthdayContainer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="birthdayContainer">
+        <iframe src="birthdayIndex.html" width="100%" height="100%" frameborder="0"></iframe>
+    </div>
+    <div id="fireworkContainer">
+        <iframe src="firework.html" width="100%" height="100%" frameborder="0"></iframe>
+    </div>
+
+    <script>
+        // 监听来自birthdayIndex.html的消息
+        window.addEventListener('message', function(event) {
+            if (event.data === 'countdownComplete') {
+                // 倒计时结束后切换到烟花动画
+                document.getElementById('birthdayContainer').style.display = 'none';
+                document.getElementById('fireworkContainer').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html> 
