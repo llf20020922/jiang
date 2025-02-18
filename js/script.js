@@ -818,56 +818,102 @@ const shellTypes = {
 
 const shellNames = Object.keys(shellTypes);
 
+// 修改初始化代码
 function init() {
-	// Remove loading state
-	document.querySelector(".loading-init").remove();
-	appNodes.stageContainer.classList.remove("remove");
+    try {
+        // Remove loading state
+        const loadingInit = document.querySelector(".loading-init");
+        if (loadingInit) {
+            loadingInit.remove();
+        }
+        
+        if (appNodes.stageContainer) {
+            appNodes.stageContainer.classList.remove("remove");
+        }
 
-	// 修改这里：直接设置为非暂停状态
-	store.state.paused = false;  // 添加这行
-	store.state.config.autoLaunch = true;  // 确保自动发射开启
-	store.state.config.finale = true;  // 开启更多烟花效果
+        // 确保 Stage 初始化
+        if (!trailsStage || !mainStage) {
+            console.warn('重新初始化舞台...');
+            // 重新初始化舞台
+            window.trailsStage = new Stage("trails-canvas");
+            window.mainStage = new Stage("main-canvas");
+            window.stages = [trailsStage, mainStage];
+        }
 
-	// Populate dropdowns
-	function setOptionsForSelect(node, options) {
-		node.innerHTML = options.reduce((acc, opt) => (acc += `<option value="${opt.value}">${opt.label}</option>`), "");
-	}
+        // 设置状态
+        store.state.paused = false;
+        store.state.config.autoLaunch = true;
+        store.state.config.finale = true;
 
-	// shell type
-	let options = "";
-	shellNames.forEach((opt) => (options += `<option value="${opt}">${opt}</option>`));
-	appNodes.shellType.innerHTML = options;
-	// shell size
-	options = "";
-	['3"', '4"', '6"', '8"', '12"', '16"'].forEach((opt, i) => (options += `<option value="${i}">${opt}</option>`));
-	appNodes.shellSize.innerHTML = options;
+        // 初始化下拉菜单
+        initializeDropdowns();
 
-	setOptionsForSelect(appNodes.quality, [
-		{ label: "低", value: QUALITY_LOW },
-		{ label: "正常", value: QUALITY_NORMAL },
-		{ label: "高", value: QUALITY_HIGH },
-	]);
+        // 开始模拟
+        togglePause(false);
 
-	setOptionsForSelect(appNodes.skyLighting, [
-		{ label: "不", value: SKY_LIGHT_NONE },
-		{ label: "暗", value: SKY_LIGHT_DIM },
-		{ label: "正常", value: SKY_LIGHT_NORMAL },
-	]);
+        // 初始渲染
+        renderApp(store.state);
 
-	// 0.9 is mobile default
-	setOptionsForSelect(
-		appNodes.scaleFactor,
-		[0.5, 0.62, 0.75, 0.9, 1.0, 1.5, 2.0].map((value) => ({ value: value.toFixed(2), label: `${value * 100}%` }))
-	);
+        // 应用初始配置
+        configDidUpdate();
+    } catch (error) {
+        console.error('初始化失败:', error);
+        // 尝试重新加载页面
+        setTimeout(() => {
+            window.location.reload();
+        }, 3000);
+    }
+}
 
-	// Begin simulation
-	togglePause(false);  // 确保非暂停状态
+// 添加一个新函数来初始化下拉菜单
+function initializeDropdowns() {
+    try {
+        function setOptionsForSelect(node, options) {
+            if (node) {
+                node.innerHTML = options.reduce((acc, opt) => (acc += `<option value="${opt.value}">${opt.label}</option>`), "");
+            }
+        }
 
-	// initial render
-	renderApp(store.state);
+        // shell type
+        if (appNodes.shellType) {
+            let options = "";
+            shellNames.forEach((opt) => (options += `<option value="${opt}">${opt}</option>`));
+            appNodes.shellType.innerHTML = options;
+        }
 
-	// Apply initial config
-	configDidUpdate();
+        // shell size
+        if (appNodes.shellSize) {
+            let options = "";
+            ['3"', '4"', '6"', '8"', '12"', '16"'].forEach((opt, i) => (options += `<option value="${i}">${opt}</option>`));
+            appNodes.shellSize.innerHTML = options;
+        }
+
+        // 其他下拉菜单
+        if (appNodes.quality) {
+            setOptionsForSelect(appNodes.quality, [
+                { label: "低", value: QUALITY_LOW },
+                { label: "正常", value: QUALITY_NORMAL },
+                { label: "高", value: QUALITY_HIGH },
+            ]);
+        }
+
+        if (appNodes.skyLighting) {
+            setOptionsForSelect(appNodes.skyLighting, [
+                { label: "不", value: SKY_LIGHT_NONE },
+                { label: "暗", value: SKY_LIGHT_DIM },
+                { label: "正常", value: SKY_LIGHT_NORMAL },
+            ]);
+        }
+
+        if (appNodes.scaleFactor) {
+            setOptionsForSelect(
+                appNodes.scaleFactor,
+                [0.5, 0.62, 0.75, 0.9, 1.0, 1.5, 2.0].map((value) => ({ value: value.toFixed(2), label: `${value * 100}%` }))
+            );
+        }
+    } catch (error) {
+        console.error('下拉菜单初始化失败:', error);
+    }
 }
 
 function fitShellPositionInBoundsH(position) {
