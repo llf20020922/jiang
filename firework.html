@@ -146,30 +146,76 @@
 
 		<!-- partial -->
 		<script>
+			// 全局错误处理
+			window.onerror = function(msg, url, lineNo, columnNo, error) {
+				console.error('Error: ' + msg + '\nURL: ' + url + '\nLine: ' + lineNo);
+				return false;
+			};
+
 			// 预加载所有必需的 JS 文件
-			function loadScript(src) {
+			function loadScript(src, retry = 3) {
 				return new Promise((resolve, reject) => {
-					const script = document.createElement('script');
-					script.src = src;
-					script.onload = resolve;
-					script.onerror = reject;
-					document.head.appendChild(script);
+					function attemptLoad(attemptsLeft) {
+						const script = document.createElement('script');
+						script.src = src;
+						
+						script.onload = resolve;
+						
+						script.onerror = () => {
+							if (attemptsLeft > 0) {
+								console.warn(`重试加载 ${src}，剩余尝试次数：${attemptsLeft}`);
+								setTimeout(() => attemptLoad(attemptsLeft - 1), 1000);
+							} else {
+								reject(new Error(`Failed to load ${src}`));
+							}
+						};
+						
+						document.head.appendChild(script);
+					}
+					
+					attemptLoad(retry);
 				});
 			}
 
 			// 按顺序加载脚本
 			async function loadAllScripts() {
+				const scripts = [
+					'./js/MyMath.js',
+					'./js/Stage.js',
+					'./js/fscreen.js',
+					'./js/script.js'
+				];
+
 				try {
-					await loadScript('./js/MyMath.js');
-					await loadScript('./js/Stage.js');
-					await loadScript('./js/fscreen.js');
-					await loadScript('./js/script.js');
+					for (const script of scripts) {
+						await loadScript(script);
+						console.log(`Loaded: ${script}`);
+					}
+					
+					// 所有脚本加载完成后，确保初始化
+					if (typeof init === 'function') {
+						// 等待一小段时间确保 DOM 完全准备好
+						setTimeout(() => {
+							try {
+								init();
+							} catch (error) {
+								console.error('初始化失败，尝试重新加载', error);
+								location.reload();
+							}
+						}, 100);
+					}
 				} catch (error) {
 					console.error('Script loading failed:', error);
+					// 如果加载失败，显示错误信息并提供重试按钮
+					const loadingStatus = document.querySelector(".loading-init__status");
+					if (loadingStatus) {
+						loadingStatus.innerHTML = '加载失败，<a href="javascript:void(0)" onclick="location.reload()">点击重试</a>';
+					}
 				}
 			}
 
-			loadAllScripts();
+			// 当页面 DOM 加载完成后开始加载脚本
+			document.addEventListener('DOMContentLoaded', loadAllScripts);
 		</script>
 	</body>
 </html>
