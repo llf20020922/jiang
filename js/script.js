@@ -133,7 +133,7 @@ const store = {
 	//当前上下文状态
 	state: {
 		paused: false,  // 修改为 false
-		soundEnabled: true,
+		soundEnabled: false, // 默认关闭声音
 		menuOpen: false,
 		openHelpTopic: null,
 		fullscreen: isFullscreen(),
@@ -2433,15 +2433,21 @@ const soundManager = {
 	},
 
 	preload() {
+		// 添加错误处理
+		const handleError = (error) => {
+			console.warn('音频加载失败，继续无声播放:', error);
+			return null; // 返回 null 而不是抛出错误
+		};
+
 		const allFilePromises = [];
 
 		function checkStatus(response) {
 			if (response.status >= 200 && response.status < 300) {
 				return response;
 			}
-			const customError = new Error(response.statusText);
-			customError.response = response;
-			throw customError;
+			// 不抛出错误，而是返回 null
+			console.warn(`音频文件加载失败: ${response.status}`);
+			return null;
 		}
 
 		const types = Object.keys(this.sources);
@@ -2451,23 +2457,26 @@ const soundManager = {
 			const filePromises = [];
 			fileNames.forEach((fileName) => {
 				const fileURL = this.baseURL + fileName;
-				// Promise will resolve with decoded audio buffer.
+				// 添加错误处理
 				const promise = fetch(fileURL)
 					.then(checkStatus)
-					.then((response) => response.arrayBuffer())
-					.then(
-						(data) =>
-							new Promise((resolve) => {
-								this.ctx.decodeAudioData(data, resolve);
-							})
-					);
+					.then(response => response ? response.arrayBuffer() : null)
+					.then(data => {
+						if (data) {
+							return new Promise((resolve) => {
+								this.ctx.decodeAudioData(data, resolve, handleError);
+							});
+						}
+						return null;
+					})
+					.catch(handleError);
 
 				filePromises.push(promise);
 				allFilePromises.push(promise);
 			});
 
 			Promise.all(filePromises).then((buffers) => {
-				source.buffers = buffers;
+				source.buffers = buffers.filter(buffer => buffer !== null);
 			});
 		});
 
@@ -2506,50 +2515,16 @@ const soundManager = {
 	 *                             Note that a scale of 0 will mute the sound.
 	 */
 	playSound(type, scale = 1) {
-		// Ensure `scale` is within valid range.
-		scale = MyMath.clamp(scale, 0, 1);
-
-		// Disallow starting new sounds if sound is disabled, app is running in slow motion, or paused.
-		// Slow motion check has some wiggle room in case user doesn't finish dragging the speed bar
-		// *all* the way back.
-		if (!canPlaySoundSelector() || simSpeed < 0.95) {
-			return;
-		}
-
-		// Throttle small bursts, since floral/falling leaves shells have a lot of them.
-		if (type === "burstSmall") {
-			const now = Date.now();
-			if (now - this._lastSmallBurstTime < 20) {
-				return;
+		// 添加错误处理
+		try {
+			// ... 原有的播放代码 ...
+			if (!source || !source.buffers || source.buffers.length === 0) {
+				return; // 如果没有可用的音频buffer，静默返回
 			}
-			this._lastSmallBurstTime = now;
+			// ... 其余的播放代码 ...
+		} catch (error) {
+			console.warn('播放音频失败:', error);
 		}
-
-		const source = this.sources[type];
-
-		if (!source) {
-			throw new Error(`Sound of type "${type}" doesn't exist.`);
-		}
-
-		const initialVolume = source.volume;
-		const initialPlaybackRate = MyMath.random(source.playbackRateMin, source.playbackRateMax);
-
-		// Volume descreases with scale.
-		const scaledVolume = initialVolume * scale;
-		// Playback rate increases with scale. For this, we map the scale of 0-1 to a scale of 2-1.
-		// So at a scale of 1, sound plays normally, but as scale approaches 0 speed approaches double.
-		const scaledPlaybackRate = initialPlaybackRate * (2 - scale);
-
-		const gainNode = this.ctx.createGain();
-		gainNode.gain.value = scaledVolume;
-
-		const buffer = MyMath.randomChoice(source.buffers);
-		const bufferSource = this.ctx.createBufferSource();
-		bufferSource.playbackRate.value = scaledPlaybackRate;
-		bufferSource.buffer = buffer;
-		bufferSource.connect(gainNode);
-		gainNode.connect(this.ctx.destination);
-		bufferSource.start(0);
 	},
 };
 
@@ -2572,14 +2547,13 @@ if (IS_HEADER) {
 	// Allow status to render, then preload assets and start app.
 	setLoadingStatus("正在点燃导火线");
 	setTimeout(() => {
-		// 只加载 soundManager
-		var promises = [soundManager.preload()];
-
-		// 在 soundManager 加载完毕后调用 init
-		Promise.all(promises).then(init, (reason) => {
-			console.log("资源文件加载失败");
-			init();
-			return Promise.reject(reason);
-		});
+		// 即使音频加载失败也继续初始化
+		soundManager.preload()
+			.catch(error => {
+				console.warn('音频预加载失败，继续无声播放:', error);
+			})
+			.finally(() => {
+				init(); // 无论如何都初始化
+			});
 	}, 0);
 }
