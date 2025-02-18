@@ -300,7 +300,7 @@ const isRunning = (state = store.state) => !state.paused && !state.menuOpen;
 // Whether user has enabled sound.
 const soundEnabledSelector = (state = store.state) => state.soundEnabled;
 // Whether any sounds are allowed, taking into account multiple factors.
-const canPlaySoundSelector = (state = store.state) => isRunning(state) && soundEnabledSelector(state);
+const canPlaySoundSelector = () => false; // 始终返回 false
 // Convert quality to number.
 const qualitySelector = () => +store.state.config.quality;
 const shellNameSelector = () => store.state.config.shell;
@@ -2398,134 +2398,15 @@ const Spark = {
 //音效管理器
 const soundManager = {
 	baseURL: "./audio/",
-	ctx: new (window.AudioContext || window.webkitAudioContext)(),
-	sources: {
-		lift: {
-			volume: 1,
-			playbackRateMin: 0.85,
-			playbackRateMax: 0.95,
-			fileNames: ["lift1.mp3", "lift2.mp3", "lift3.mp3"],
-		},
-		burst: {
-			volume: 1,
-			playbackRateMin: 0.8,
-			playbackRateMax: 0.9,
-			fileNames: ["burst1.mp3", "burst2.mp3"],
-		},
-		burstSmall: {
-			volume: 0.25,
-			playbackRateMin: 0.8,
-			playbackRateMax: 1,
-			fileNames: ["burst-sm-1.mp3", "burst-sm-2.mp3"],
-		},
-		crackle: {
-			volume: 0.2,
-			playbackRateMin: 1,
-			playbackRateMax: 1,
-			fileNames: ["crackle1.mp3"],
-		},
-		crackleSmall: {
-			volume: 0.3,
-			playbackRateMin: 1,
-			playbackRateMax: 1,
-			fileNames: ["crackle-sm-1.mp3"],
-		},
-	},
-
+	ctx: null, // 不创建音频上下文
+	sources: {},
 	preload() {
-		// 添加错误处理
-		const handleError = (error) => {
-			console.warn('音频加载失败，继续无声播放:', error);
-			return null; // 返回 null 而不是抛出错误
-		};
-
-		const allFilePromises = [];
-
-		function checkStatus(response) {
-			if (response.status >= 200 && response.status < 300) {
-				return response;
-			}
-			// 不抛出错误，而是返回 null
-			console.warn(`音频文件加载失败: ${response.status}`);
-			return null;
-		}
-
-		const types = Object.keys(this.sources);
-		types.forEach((type) => {
-			const source = this.sources[type];
-			const { fileNames } = source;
-			const filePromises = [];
-			fileNames.forEach((fileName) => {
-				const fileURL = this.baseURL + fileName;
-				// 添加错误处理
-				const promise = fetch(fileURL)
-					.then(checkStatus)
-					.then(response => response ? response.arrayBuffer() : null)
-					.then(data => {
-						if (data) {
-							return new Promise((resolve) => {
-								this.ctx.decodeAudioData(data, resolve, handleError);
-							});
-						}
-						return null;
-					})
-					.catch(handleError);
-
-				filePromises.push(promise);
-				allFilePromises.push(promise);
-			});
-
-			Promise.all(filePromises).then((buffers) => {
-				source.buffers = buffers.filter(buffer => buffer !== null);
-			});
-		});
-
-		return Promise.all(allFilePromises);
+		// 直接返回一个已完成的 Promise
+		return Promise.resolve();
 	},
-
-	pauseAll() {
-		this.ctx.suspend();
-	},
-
-	resumeAll() {
-		// Play a sound with no volume for iOS. This 'unlocks' the audio context when the user first enables sound.
-		this.playSound("lift", 0);
-		// Chrome mobile requires interaction before starting audio context.
-		// The sound toggle button is triggered on 'touchstart', which doesn't seem to count as a full
-		// interaction to Chrome. I guess it needs a click? At any rate if the first thing the user does
-		// is enable audio, it doesn't work. Using a setTimeout allows the first interaction to be registered.
-		// Perhaps a better solution is to track whether the user has interacted, and if not but they try enabling
-		// sound, show a tooltip that they should tap again to enable sound.
-		setTimeout(() => {
-			this.ctx.resume();
-		}, 250);
-	},
-
-	// Private property used to throttle small burst sounds.
-	_lastSmallBurstTime: 0,
-
-	/**
-	 * Play a sound of `type`. Will randomly pick a file associated with type, and play it at the specified volume
-	 * and play speed, with a bit of random variance in play speed. This is all based on `sources` config.
-	 *
-	 * @param  {string} type - The type of sound to play.
-	 * @param  {?number} scale=1 - Value between 0 and 1 (values outside range will be clamped). Scales less than one
-	 *                             descrease volume and increase playback speed. This is because large explosions are
-	 *                             louder, deeper, and reverberate longer than small explosions.
-	 *                             Note that a scale of 0 will mute the sound.
-	 */
-	playSound(type, scale = 1) {
-		// 添加错误处理
-		try {
-			// ... 原有的播放代码 ...
-			if (!source || !source.buffers || source.buffers.length === 0) {
-				return; // 如果没有可用的音频buffer，静默返回
-			}
-			// ... 其余的播放代码 ...
-		} catch (error) {
-			console.warn('播放音频失败:', error);
-		}
-	},
+	pauseAll() {},
+	resumeAll() {},
+	playSound() {} // 空函数
 };
 
 // imageTemplateManager.preload().then(() => {
@@ -2547,13 +2428,7 @@ if (IS_HEADER) {
 	// Allow status to render, then preload assets and start app.
 	setLoadingStatus("正在点燃导火线");
 	setTimeout(() => {
-		// 即使音频加载失败也继续初始化
-		soundManager.preload()
-			.catch(error => {
-				console.warn('音频预加载失败，继续无声播放:', error);
-			})
-			.finally(() => {
-				init(); // 无论如何都初始化
-			});
+		// 直接初始化，不加载音频
+		init();
 	}, 0);
 }
