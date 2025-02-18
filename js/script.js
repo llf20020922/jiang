@@ -821,6 +821,12 @@ const shellNames = Object.keys(shellTypes);
 // 修改初始化代码
 function init() {
     try {
+        // 防止重复初始化
+        if (window.isInitialized) {
+            console.warn('已经初始化过了');
+            return;
+        }
+
         // Remove loading state
         const loadingInit = document.querySelector(".loading-init");
         if (loadingInit) {
@@ -832,9 +838,7 @@ function init() {
         }
 
         // 确保 Stage 初始化
-        if (!trailsStage || !mainStage) {
-            console.warn('重新初始化舞台...');
-            // 重新初始化舞台
+        if (!window.trailsStage || !window.mainStage) {
             window.trailsStage = new Stage("trails-canvas");
             window.mainStage = new Stage("main-canvas");
             window.stages = [trailsStage, mainStage];
@@ -856,12 +860,31 @@ function init() {
 
         // 应用初始配置
         configDidUpdate();
+
+        // 标记初始化完成
+        window.isInitialized = true;
+
+        // 添加页面可见性变化监听
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                store.state.paused = true;
+            } else {
+                store.state.paused = false;
+                requestAnimationFrame(() => {
+                    // 恢复动画
+                    togglePause(false);
+                });
+            }
+        });
+
     } catch (error) {
         console.error('初始化失败:', error);
-        // 尝试重新加载页面
-        setTimeout(() => {
-            window.location.reload();
-        }, 3000);
+        // 如果是首次初始化失败，尝试重新加载
+        if (!window.isInitialized) {
+            setTimeout(() => {
+                location.reload();
+            }, 3000);
+        }
     }
 }
 
